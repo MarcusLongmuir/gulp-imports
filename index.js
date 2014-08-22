@@ -27,16 +27,26 @@ var getExtension = function(p) {
 };
 
 function getImport(ext, contents, dirname) {
+    if(!patterns[ext] || patterns.hasOwnProperty(ext)){
+        ext = 'js';//Default to js pattern (@import)
+    }
     patterns[ext].lastIndex = 0; // OH lastIndex - how I HATE you.
     var match = patterns[ext].exec(contents);
     return match ? { matchText: match[0], index: match.index, path: path.join(dirname, match[2])} : undefined;
 }
 
 function processMatch( _import, contents ) {
+    var file_contents;
+    try{
+        file_contents = String(fs.readFileSync( _import.path ));
+    } catch (e){
+        throw new g_util.PluginError('gulp-imports','File not found: '+_import.path);
+    }
+
     return contents.substring(0,_import.index)+ 
     processFile(
         _import.path,
-        String(fs.readFileSync( _import.path ))
+        file_contents
     )+ 
     contents.substring(_import.index+_import.matchText.length);
 }
@@ -61,11 +71,16 @@ module.exports = function () {
             this.emit('error', new g_util.PluginError('gulp-imports', 'Yikes - sorry about this, but streams are not supported yet.'));
         }
 
-        if(patterns.hasOwnProperty(ext)) {
-            if (file.isBuffer()) {
-                contents = processFile(file.path, contents);
-                file.contents = new Buffer(contents);
+        try{
+            if(!patterns[ext] || patterns.hasOwnProperty(ext)) {
+                if (file.isBuffer()) {
+                    contents = processFile(file.path, contents);
+                    file.contents = new Buffer(contents);
+                }
             }
+        } catch(e){
+            this.emit('error',e);
+            return;
         }
 
         this.emit('data', file);
